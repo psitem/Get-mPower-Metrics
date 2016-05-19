@@ -16,11 +16,9 @@
 	.PARAMETER influxdbpassword
 	InfluxDB password
 	.PARAMETER influxdbhost
-	Hostname of the InfluxDB server
+	Hostname of the InfluxDB server. The UDP listener must be enabled on the server.
 	.PARAMETER influxdbport
-	Port for the InfluxDB server (default 8086)
-	.PARAMETER influxdbname
-	InfluxDB database name
+	Port for the InfluxDB server (default 2500)
 	.INPUTS
 	None
 	.OUTPUTS
@@ -30,7 +28,7 @@
 	https://github.com/tbyehl/Get-mPower-metrics
 	
 	.EXAMPLE
-	.\Get-mPower-metrics.ps1 -user "username" -password "password" -mPowerHost "10.0.0.1" -influxdbuser "influxdb user" -influxdbpassword "influxdb password" -influxdbname "influx-database" -influxdbhost "localhost" -influxdbport 8086
+	.\Get-mPower-metrics.ps1 -user "username" -password "password" -mPowerHost "10.0.0.1" -influxdbuser "influxdb user" -influxdbpassword "influxdb password" -influxdbhost "localhost" -influxdbport 2500
 	
 #>
 param(
@@ -45,6 +43,14 @@ param(
 	[parameter(HelpMessage="InfluxDB database name", Mandatory=$true)] [Alias("id")] [string] $influxdbname
 	)
    
+
+	$endpoint = New-Object System.Net.IPEndPoint ([ipaddress] $influxdbhost, $influxdbPort)
+	$udpclient= New-Object System.Net.Sockets.UdpClient
+
+function Send-UDP($Message) {
+	$bytes=[Text.Encoding]::ASCII.GetBytes($Message)
+	$bytesSent=$udpclient.Send($bytes,$bytes.length,$endpoint)
+}
 
 $postParams = @{ username=$user ; password =$password }
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
@@ -70,9 +76,6 @@ catch {$_}
 $w.SendAsync([System.Text.Encoding]::ASCII.GetBytes('{ "time": 10} '), [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $c) | Out-Null
 
 $lines=""
-$count=0
-$totalPower = 0
-$elapsed = [System.Diagnostics.Stopwatch]::StartNew()
 
 While ($true) {	
 	$t = $w.ReceiveAsync($rc, $c)
@@ -82,7 +85,6 @@ While ($true) {
 	$json = ConvertFrom-Json ( ([System.Text.Encoding]::ASCII.GetString($rc) -split "} ] }")[0] + "} ] }" )
 
 	$json.sensors | % {
-		$count += 1
 		$mPowerHostname = $refjson.sensors[($_.Port - 1)].Label
 		$sensor = $_
 		$line=""
@@ -95,25 +97,10 @@ While ($true) {
 				default { $lines +="mFi_$($temp.Name),hostname=""$($mPowerHostname -replace " ", "\ ")"" value=$($sensor.($temp.Name)) `n" }
 			}		
 		}
-		$totalPower += $sensor.power
 	}
 
-	if ($count -ge 8) {
-		if  ($elapsed.ElapsedMilliseconds -ge $interval) {
-			$lines += "mFi_TotalPower,hostname=""mPower-1"" value=$totalPower"
-			$lines 
-
-			$elapsed = [System.Diagnostics.Stopwatch]::StartNew()
-
-			$authheader = "Basic " + ([Convert]::ToBase64String([System.Text.encoding]::ASCII.GetBytes("$($influxdbuser):$($influxdbpassword)")))
-			$uri = "http://$($influxdbhost):$($influxdbport)/write?db=$influxdbname"
-			Invoke-RestMethod -Headers @{Authorization=$authheader} -Uri $uri -Method POST -Body $lines
-
-			Write-Host (Get-Date)
-		}
-
-		$lines=""
-		$count=0
-		$totalPower = 0
-	}
+	$lines
+	Send-UDP $lines
+	Get-Date
+	$lines=""
 }
