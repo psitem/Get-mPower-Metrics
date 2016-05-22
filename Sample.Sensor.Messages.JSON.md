@@ -1,4 +1,4 @@
-These are sample messages passed by the mFi WebSockets API for an mPower Pro. Note that the JSON message may contain the information from a single sensor or several. 
+These are sample messages passed by the mFi WebSockets API for an mPower Pro joined to an mFi Controller. Note that the JSON message may contain the information from a single sensor or several. 
 
     {  
         "v":1,
