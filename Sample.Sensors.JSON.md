@@ -1,4 +1,4 @@
-## This is a sample of what /sensors returns.
+This is a sample of what /sensors returns from an mPower Pro that is joined to an mFi Controller instance.
 
     {  
         "sensors":[  
