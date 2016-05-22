@@ -42,7 +42,6 @@ param(
 	[parameter(HelpMessage="InfluxDB host name", Mandatory=$true)] [Alias("ihp")] [string] $influxdbport=8086,
 	[parameter(HelpMessage="InfluxDB database name", Mandatory=$true)] [Alias("id")] [string] $influxdbname
 	)
-   
 
 	$endpoint = New-Object System.Net.IPEndPoint ([ipaddress] $influxdbhost, $influxdbPort)
 	$udpclient= New-Object System.Net.Sockets.UdpClient
@@ -61,11 +60,11 @@ $refjson = Invoke-WebRequest "http://$mPowerHost/sensors" -Method Get -WebSessio
 
 
 $l = [byte[]] @(,0) * 1024
-$rc = New-Object System.ArraySegment[byte]  -ArgumentList @(,$l)
+$rc = New-Object System.ArraySegment[byte] -ArgumentList @(,$l)
 
 $w = New-object System.Net.WebSockets.ClientWebSocket												
 $w.Options.AddSubProtocol("mfi-protocol")
-$c = New-Object System.Threading.CancellationToken												   
+$c = New-Object System.Threading.CancellationToken
 
 try { $t = $w.ConnectAsync("ws://$($mPowerHost):7681/?c=$cookie", $c) }
 catch {$_}
@@ -76,6 +75,7 @@ catch {$_}
 $w.SendAsync([System.Text.Encoding]::ASCII.GetBytes('{ "time": 10} '), [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $c) | Out-Null
 
 $lines=""
+$totalPower = @(0..7) ; $totalPower | % {$totalPower[$_] = 0}
 
 While ($true) {	
 	$t = $w.ReceiveAsync($rc, $c)
@@ -89,6 +89,8 @@ While ($true) {
 		$sensor = $_
 		$line=""
 
+		$totalPower[($sensor.Port - 1)] = $sensor.power
+
 		$sensor | Get-Member -MemberType NoteProperty | ? {$_.Name -ne 'Label' } | % {
 			$temp=$_
 
@@ -98,6 +100,8 @@ While ($true) {
 			}		
 		}
 	}
+
+	$lines += "mFi_totalpower,hostname=""$($mPowerHost)"" value=$( ($totalPower | Measure-Object -Sum).Sum ) `n"
 
 	$lines
 	Send-UDP $lines
