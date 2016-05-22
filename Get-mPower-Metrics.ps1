@@ -83,7 +83,7 @@ While ( $true ) {
 	do { Start-Sleep -Milliseconds 75 }
 		until ( $t.IsCompleted )
 
-	$json = ConvertFrom-Json ( ([System.Text.Encoding]::ASCII.GetString($rc) -split "} ] }")[0] + "} ] }" )
+	$json = ConvertFrom-Json ( ( ( [System.Text.Encoding]::ASCII.GetString($rc) -split "} ] }")[0], "} ] }" -join " " ) )
 
 	$json.sensors | % {
 		$mPowerHostname = $refjson.sensors[( $_.Port - 1 )].Label
