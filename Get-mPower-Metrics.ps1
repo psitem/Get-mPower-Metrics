@@ -57,7 +57,7 @@ Invoke-WebRequest "http://$mPowerHost/login.cgi" -Method GET -WebSession $sessio
 Invoke-WebRequest "http://$mPowerHost/login.cgi" -Method Post -Body $postParams -WebSession $session | Out-Null
 $cookie=$session.Cookies.GetCookies("http://$mPowerHost")[0].Value
 $refjson = Invoke-WebRequest "http://$mPowerHost/sensors" -Method Get -WebSession $session | select Content | %{$_.Content} | ConvertFrom-Json
-
+$sensorCount = $refjson.Sensors.Count
 
 $l = [byte[]] @(,0) * 1024
 $rc = New-Object System.ArraySegment[byte] -ArgumentList @(,$l)
@@ -75,33 +75,36 @@ catch {$_}
 $w.SendAsync([System.Text.Encoding]::ASCII.GetBytes('{ "time": 10} '), [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $c) | Out-Null
 
 $lines=""
-$totalPower = @(0..7) ; $totalPower | % {$totalPower[$_] = 0}
+$watts = @(0..( $sensorCount - 1 ) ) ; $watts | % { $watts[$_] = 0 }
 
-While ($true) {	
+While ( $true ) {	
 	$t = $w.ReceiveAsync($rc, $c)
-	do { Start-Sleep -Milliseconds 10 }
-	until ($t.IsCompleted)
+
+	do { Start-Sleep -Milliseconds 75 }
+		until ( $t.IsCompleted )
 
 	$json = ConvertFrom-Json ( ([System.Text.Encoding]::ASCII.GetString($rc) -split "} ] }")[0] + "} ] }" )
 
 	$json.sensors | % {
-		$mPowerHostname = $refjson.sensors[($_.Port - 1)].Label
+		$mPowerHostname = $refjson.sensors[( $_.Port - 1 )].Label
 		$sensor = $_
 		$line=""
 
-		$totalPower[($sensor.Port - 1)] = $sensor.power
-
-		$sensor | Get-Member -MemberType NoteProperty | ? {$_.Name -ne 'Label' } | % {
+		$sensor | Get-Member -MemberType NoteProperty | ? { $_.Name -ne 'Label' } | % {
 			$temp=$_
 
 			switch ( $sensor.($temp.Name).GetType().Name ) {
-				"String" { $lines +="mFi_$($temp.Name),hostname=""$($mPowerHostname -replace " ", "\ ")"" value=""$($sensor.($temp.Name) -replace " ", "\ ")"" `n" }
-				default { $lines +="mFi_$($temp.Name),hostname=""$($mPowerHostname -replace " ", "\ ")"" value=$($sensor.($temp.Name)) `n" }
+				"String" { $lines +="mFi_$( $temp.Name ),hostname=""$( $mPowerHostname -replace " ", "\ " )"" value=""$( $sensor.($temp.Name) -replace " ", "\ " )"" `n" }
+				default { $lines +="mFi_$( $temp.Name ),hostname=""$( $mPowerHostname -replace " ", "\ " )"" value=$( $sensor.($temp.Name) ) `n" }
 			}		
 		}
-	}
 
-	$lines += "mFi_totalpower,hostname=""$($mPowerHost)"" value=$( ($totalPower | Measure-Object -Sum).Sum ) `n"
+		$watts[($sensor.Port - 1)] = $sensor.power
+
+		if ( $sensor.Port -eq $sensorCount ) {
+			$lines += "mFi_totalpower,hostname=""$( $mPowerHost )"" value=$( ( $watts | Measure-Object -Sum ).Sum ) `n"
+		}
+	}
 
 	$lines
 	Send-UDP $lines
