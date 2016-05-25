@@ -9,8 +9,6 @@
 	mPower Device Password
 	.PARAMETER mPowerHost
 	mPower address
-	.PARAMETER interval
-	Minimum interval in milliseconds to send metrics to InfluxDB. Metrics received in between intervals will be discarded. Defaults to 1000.
 	.PARAMETER influxdbuser
 	InfluxDB username
 	.PARAMETER influxdbpassword
@@ -35,7 +33,6 @@ param(
 	[parameter(HelpMessage="mPower username", Mandatory=$true)] [Alias("u")] [string] $user,
 	[parameter(HelpMessage="mPower account password", Mandatory=$true)] [Alias("p")] [string] $password,
 	[parameter(HelpMessage="mPower address", Mandatory=$true)] [Alias("h")] [string] $mPowerHost,
-	[parameter(HelpMessage="Time in milliseconds between posting metrics to InfluxDB", Mandatory=$false)] [Alias("i")] [int] $interval=1000,
 	[parameter(HelpMessage="InfluxDB username", Mandatory=$true)] [Alias("iu")] [string] $influxdbuser,
 	[parameter(HelpMessage="InfluxDB password", Mandatory=$true)] [Alias("ip")] [string] $influxdbpassword,
 	[parameter(HelpMessage="InfluxDB host name", Mandatory=$true)] [Alias("ih")] [string] $influxdbhost,
